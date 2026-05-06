@@ -1,1 +1,367 @@
-frweavfa
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>珍藏大師 - 偶像收藏投資管理系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F8FAFC; color: #1E293B; }
+        .sidebar-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sidebar-item.active { background-color: #2563EB; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+        .glass-effect { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); }
+        .loading-spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3B82F6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #toast { transition: all 0.4s ease; transform: translate(-50%, 20px); opacity: 0; }
+        #toast.show { transform: translate(-50%, 0); opacity: 1; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- 訊息提示 -->
+    <div id="toast" class="fixed bottom-10 left-1/2 z-[100] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center space-x-3">
+        <span id="toast-icon">ℹ️</span>
+        <span id="toast-msg">載入中...</span>
+    </div>
+
+    <!-- 側邊導覽列 -->
+    <aside class="w-72 bg-white border-r border-slate-200 flex flex-col p-6 space-y-8">
+        <div class="flex items-center space-x-3 px-2">
+            <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-200">💎</div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">珍藏大師</span>
+        </div>
+
+        <nav class="flex-1 space-y-2">
+            <button onclick="switchView('dashboard')" id="btn-dashboard" class="sidebar-item active w-full flex items-center space-x-3 p-4 rounded-2xl font-bold">
+                <span class="text-xl">📊</span> <span>資產儀表板</span>
+            </button>
+            <button onclick="switchView('collection')" id="btn-collection" class="sidebar-item w-full flex items-center space-x-3 p-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-50">
+                <span class="text-xl">💿</span> <span>我的收藏</span>
+            </button>
+        </nav>
+
+        <!-- 用戶狀態區 -->
+        <div class="pt-6 border-t border-slate-100">
+            <div id="user-profile" class="hidden">
+                <div class="flex items-center space-x-3 mb-4 p-2 bg-slate-50 rounded-2xl">
+                    <img id="user-photo" class="w-10 h-10 rounded-xl border-2 border-white shadow-sm" src="" alt="">
+                    <div class="overflow-hidden">
+                        <p id="user-name" class="text-sm font-bold text-slate-800 truncate"></p>
+                        <p class="text-[10px] text-blue-500 font-bold flex items-center">
+                            <span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1 animate-pulse"></span> 雲端同步中
+                        </p>
+                    </div>
+                </div>
+                <button onclick="handleLogout()" class="w-full text-xs text-slate-400 font-bold p-2 hover:text-red-500 transition text-left flex items-center space-x-2">
+                    <span>🚪</span> <span>登出系統</span>
+                </button>
+            </div>
+            <button id="btn-login" onclick="handleLogin()" class="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold flex items-center justify-center space-x-3 hover:bg-slate-800 transition shadow-lg shadow-slate-200">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" class="w-5 h-5 bg-white p-0.5 rounded-full" alt="">
+                <span>Google 登入</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- 主顯示區 -->
+    <main class="flex-1 overflow-y-auto bg-[#F8FAFC]">
+        <!-- 未登入畫面 -->
+        <div id="auth-view" class="h-full flex flex-col items-center justify-center p-10 text-center">
+            <div class="w-32 h-32 bg-white rounded-[3rem] shadow-xl flex items-center justify-center text-5xl mb-8 animate-bounce">🔒</div>
+            <h2 class="text-3xl font-black text-slate-800 mb-3">您的專屬收藏保險箱</h2>
+            <p class="text-slate-500 max-w-sm mb-10 leading-relaxed">請使用 Google 帳號登入，以同步您的偶像收藏資產與投資損益分析。</p>
+            <button onclick="handleLogin()" class="bg-blue-600 text-white px-12 py-5 rounded-[2rem] font-bold shadow-2xl shadow-blue-600/30 hover:bg-blue-700 transition active:scale-95">
+                開始雲端同步
+            </button>
+        </div>
+
+        <!-- 已登入內容 -->
+        <div id="app-view" class="hidden p-10">
+            <header class="flex justify-between items-center mb-10">
+                <div>
+                    <h2 class="text-3xl font-black text-slate-800" id="view-title">資產儀表板</h2>
+                    <p class="text-slate-400 text-sm font-medium mt-1">即時追蹤您的偶像資產價值</p>
+                </div>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-[2rem] font-bold shadow-xl shadow-blue-600/20 transition flex items-center space-x-2">
+                    <span>✨</span> <span>新增收藏項目</span>
+                </button>
+            </header>
+
+            <div id="dashboard-content" class="space-y-10">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col justify-between">
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">預估資產總價值 (TWD)</p>
+                        <h3 class="text-5xl font-black text-slate-800" id="total-value">NT$ 0</h3>
+                        <div class="mt-6 flex items-center text-green-500 font-bold text-sm">
+                            <span class="mr-1">📈</span> <span>資產價值穩定同步中</span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col justify-between">
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">收藏品項總數</p>
+                        <h3 class="text-5xl font-black text-slate-800" id="total-items">0 <span class="text-xl">件</span></h3>
+                        <div class="mt-6 flex items-center text-blue-500 font-bold text-sm">
+                            <span class="mr-1">💿</span> <span>珍藏數位化紀錄</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 收藏列表 -->
+            <div id="list-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
+                <!-- 資料動態載入 -->
+            </div>
+        </div>
+    </main>
+
+    <!-- 彈窗 -->
+    <div id="modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md hidden z-[100] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-xl rounded-[3.5rem] p-12 shadow-2xl relative overflow-hidden">
+            <button onclick="closeModal()" class="absolute top-8 right-8 text-slate-300 hover:text-slate-800 text-2xl transition">✕</button>
+            
+            <h3 class="text-2xl font-black text-slate-800 mb-8">建立新珍藏紀錄</h3>
+            
+            <div class="space-y-6">
+                <!-- 圖片上傳 -->
+                <div class="flex justify-center">
+                    <label class="cursor-pointer group relative">
+                        <div id="preview-area" class="w-40 h-40 bg-slate-50 border-4 border-dashed border-slate-100 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-400 overflow-hidden group-hover:border-blue-400 transition">
+                            <span class="text-3xl mb-2">📸</span>
+                            <span class="text-[10px] font-bold uppercase">上傳照片</span>
+                        </div>
+                        <input type="file" id="image-input" class="hidden" accept="image/*" onchange="handleImageSelect(event)">
+                    </label>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-4">收藏品品名</label>
+                        <input id="item-name" type="text" placeholder="例如：Karina 打歌限定小卡" class="w-full bg-slate-50 p-5 rounded-[1.5rem] outline-none border-2 border-transparent focus:border-blue-500 transition font-bold">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-4">所屬偶像/團體</label>
+                            <select id="item-group" class="w-full bg-slate-50 p-5 rounded-[1.5rem] outline-none font-bold">
+                                <option value="aespa">aespa</option>
+                                <option value="ENHYPEN">ENHYPEN</option>
+                                <option value="Other">其他</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-4">購入金額 (TWD)</label>
+                            <input id="item-price" type="number" placeholder="500" class="w-full bg-slate-50 p-5 rounded-[1.5rem] outline-none font-bold">
+                        </div>
+                    </div>
+                </div>
+
+                <button id="save-btn" onclick="uploadData()" class="w-full py-6 bg-blue-600 text-white font-black rounded-[2rem] shadow-2xl shadow-blue-600/30 active:scale-95 transition-all mt-6">
+                    確認並儲存至雲端
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 連線資訊
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxUgKD5rPudbCJmTFYj6LAxOYX5CnqppU",
+            authDomain: "collector-a7285.firebaseapp.com",
+            projectId: "collector-a7285",
+            storageBucket: "collector-a7285.firebasestorage.app",
+            messagingSenderId: "155975964842",
+            appId: "1:155975964842:web:39ff1e95f210614a2798d3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'collector-a7285';
+
+        let currentUser = null;
+        let unsubscribe = null;
+        let selectedBase64 = "";
+
+        // UI 元件
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-msg');
+
+        function notify(msg, icon = 'ℹ️') {
+            document.getElementById('toast-icon').innerText = icon;
+            toastMsg.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // 登入狀態監聽
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            const authView = document.getElementById('auth-view');
+            const appView = document.getElementById('app-view');
+            const profile = document.getElementById('user-profile');
+            const loginBtn = document.getElementById('btn-login');
+
+            if (user) {
+                authView.classList.add('hidden');
+                appView.classList.remove('hidden');
+                profile.classList.remove('hidden');
+                loginBtn.classList.add('hidden');
+                
+                document.getElementById('user-photo').src = user.photoURL;
+                document.getElementById('user-name').innerText = user.displayName;
+                
+                notify(`歡迎回來, ${user.displayName.split(' ')[0]}!`, '👋');
+                bindDataListener(user.uid);
+            } else {
+                authView.classList.remove('hidden');
+                appView.classList.add('hidden');
+                profile.classList.add('hidden');
+                loginBtn.classList.remove('hidden');
+                if (unsubscribe) unsubscribe();
+            }
+        });
+
+        // 登入 / 登出功能
+        window.handleLogin = async () => {
+            const provider = new GoogleAuthProvider();
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                notify("登入失敗: " + error.message, '❌');
+            }
+        };
+
+        window.handleLogout = () => signOut(auth);
+
+        // Firestore 資料監聽 (符合規則 1)
+        function bindDataListener(uid) {
+            const colRef = collection(db, 'artifacts', appId, 'users', uid, 'items');
+            unsubscribe = onSnapshot(colRef, (snapshot) => {
+                const items = [];
+                snapshot.forEach(d => items.push({ id: d.id, ...d.data() }));
+                updateDisplay(items);
+            }, (error) => {
+                notify("讀取失敗: 權限不足或連線中斷", '⚠️');
+            });
+        }
+
+        // Base64 圖片選取
+        window.handleImageSelect = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 800000) {
+                notify("圖片超過 800KB，請更換較小的檔案以加速上傳", '📸');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                selectedBase64 = event.target.result;
+                document.getElementById('preview-area').innerHTML = `<img src="${selectedBase64}" class="w-full h-full object-cover">`;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // 上傳至雲端
+        window.uploadData = async () => {
+            if (!currentUser) return;
+            const name = document.getElementById('item-name').value;
+            const group = document.getElementById('item-group').value;
+            const price = parseInt(document.getElementById('item-price').value);
+            const btn = document.getElementById('save-btn');
+
+            if (!name || isNaN(price)) {
+                notify("請輸入完整的名稱與價格", '✍️');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<div class="loading-spinner mx-auto"></div>`;
+
+            try {
+                const colRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'items');
+                await addDoc(colRef, {
+                    name,
+                    group,
+                    price,
+                    image: selectedBase64,
+                    createdAt: serverTimestamp()
+                });
+                notify("資料已成功同步至雲端", '✅');
+                closeModal();
+                // 清空
+                document.getElementById('item-name').value = "";
+                document.getElementById('item-price').value = "";
+                document.getElementById('preview-area').innerHTML = `<span class="text-3xl mb-2">📸</span><span class="text-[10px] font-bold uppercase">上傳照片</span>`;
+                selectedBase64 = "";
+            } catch (err) {
+                notify("上傳失敗: " + err.message, '❌');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "確認並儲存至雲端";
+            }
+        };
+
+        // UI 渲染
+        function updateDisplay(items) {
+            const list = document.getElementById('list-content');
+            let total = 0;
+            list.innerHTML = '';
+            
+            // 排序: 最新優先
+            items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            items.forEach(item => {
+                total += item.price;
+                const card = document.createElement('div');
+                card.className = 'bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-50 hover:shadow-xl hover:border-blue-100 transition-all group relative';
+                card.innerHTML = `
+                    <div class="h-48 bg-slate-50 rounded-[2rem] mb-6 overflow-hidden relative">
+                        ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover">` : '<div class="h-full flex items-center justify-center text-slate-300 font-bold">NO IMAGE</div>'}
+                        <button onclick="deleteItem('${item.id}')" class="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur rounded-2xl flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 transition shadow-sm">🗑️</button>
+                    </div>
+                    <div class="px-2">
+                        <span class="text-[10px] font-black px-3 py-1 bg-blue-50 text-blue-600 rounded-full uppercase tracking-widest">${item.group}</span>
+                        <h4 class="font-black text-slate-800 mt-3 text-lg truncate">${item.name}</h4>
+                        <div class="flex justify-between items-end mt-4">
+                            <p class="text-2xl font-black text-slate-800">NT$ ${item.price.toLocaleString()}</p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+
+            document.getElementById('total-value').innerText = `NT$ ${total.toLocaleString()}`;
+            document.getElementById('total-items').innerText = items.length;
+        }
+
+        window.deleteItem = async (id) => {
+            if (!currentUser || !confirm("確定要刪除這筆珍藏紀錄嗎？資料將無法恢復。")) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'items', id));
+                notify("資料已刪除", '🗑️');
+            } catch (e) {
+                notify("刪除失敗", '❌');
+            }
+        };
+
+        // 切換視圖
+        window.switchView = (view) => {
+            const isDash = view === 'dashboard';
+            document.getElementById('dashboard-content').style.display = isDash ? 'block' : 'none';
+            document.getElementById('view-title').innerText = isDash ? '資產儀表板' : '我的收藏清單';
+            document.getElementById('btn-dashboard').className = `sidebar-item w-full flex items-center space-x-3 p-4 rounded-2xl font-bold ${isDash ? 'active' : 'text-slate-500 hover:bg-slate-50'}`;
+            document.getElementById('btn-collection').className = `sidebar-item w-full flex items-center space-x-3 p-4 rounded-2xl font-bold ${!isDash ? 'active' : 'text-slate-500 hover:bg-slate-50'}`;
+        };
+
+        window.openModal = () => document.getElementById('modal').classList.remove('hidden');
+        window.closeModal = () => document.getElementById('modal').classList.add('hidden');
+    </script>
+</body>
+</html>
